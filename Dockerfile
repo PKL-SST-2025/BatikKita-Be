@@ -12,8 +12,8 @@ COPY src ./src
 RUN apt-get update && apt-get install -y \
     pkg-config libssl-dev libpq-dev build-essential
 
-# ✅ Install sqlx CLI
-RUN cargo install sqlx-cli --no-default-features --features postgres
+# ✅ Install sqlx CLI versi lama
+RUN cargo install sqlx-cli --version 0.7.3 --no-default-features --features postgres
 
 # ✅ Set env for migration
 ARG DATABASE_URL
