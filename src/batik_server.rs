@@ -1,211 +1,10 @@
-// ...existing code...
 use actix_web::{web, App, HttpServer, HttpResponse, HttpRequest, middleware::Logger, Result};
 use actix_cors::Cors;
 use serde_json::json;
 use actix_web_actors::ws;
 use actix::prelude::*;
-// ...existing code...
+use sqlx::PgPool;
 
-// WebSocket connection for real-time chat
-#[derive(Debug)]
-pub struct ChatWebSocket {
-    pub id: String,
-    pub user_id: Option<i32>,
-    pub role: Option<String>,
-    pub manager: ConnectionManager,
-}
-
-impl ChatWebSocket {
-    pub fn new(id: String, manager: ConnectionManager) -> Self {
-        Self {
-            id,
-            user_id: None,
-            role: None,
-            manager,
-        }
-    }
-}
-
-impl Actor for ChatWebSocket {
-    type Context = ws::WebsocketContext<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        println!("💬 Chat WebSocket connected (ID: {})", self.id);
-        
-        // Add this connection to manager
-        self.manager.add_connection(
-            self.id.clone(), 
-            ctx.address(), 
-            self.user_id, 
-            self.role.clone()
-        );
-        
-        // Send welcome message
-        ctx.text(json!({
-            "type": "welcome",
-            "message": "Connected to chat service",
-            "connection_id": self.id,
-            "timestamp": chrono::Utc::now().to_rfc3339()
-        }).to_string());
-    }
-    
-    fn stopped(&mut self, _ctx: &mut Self::Context) {
-        println!("💬 Chat WebSocket disconnected (ID: {})", self.id);
-        self.manager.remove_connection(&self.id);
-    }
-}
-
-// Handle incoming messages from connection manager
-impl Handler<WebSocketMessage> for ChatWebSocket {
-    type Result = ();
-
-    fn handle(&mut self, msg: WebSocketMessage, ctx: &mut Self::Context) {
-        ctx.text(msg.0);
-    }
-}
-
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ChatWebSocket {
-    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        match msg {
-            Ok(ws::Message::Ping(msg)) => ctx.pong(&msg),
-            Ok(ws::Message::Text(text)) => {
-                let text_str = text.to_string();
-                println!("💬 Chat WebSocket received: {}", text_str);
-                
-                // Parse and handle different message types
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text_str) {
-                    if let Some(message_type) = parsed.get("type").and_then(|v| v.as_str()) {
-                        match message_type {
-                            "auth" => {
-                                // Store user info
-                                if let Some(user_id) = parsed.get("user_id").and_then(|v| v.as_i64()) {
-                                    self.user_id = Some(user_id as i32);
-                                }
-                                if let Some(role) = parsed.get("role").and_then(|v| v.as_str()) {
-                                    self.role = Some(role.to_string());
-                                }
-                                
-                                // Update connection in manager with auth info
-                                self.manager.add_connection(
-                                    self.id.clone(),
-                                    ctx.address(),
-                                    self.user_id,
-                                    self.role.clone()
-                                );
-                                
-                                println!("💬 WebSocket authenticated: user_id={:?}, role={:?}", self.user_id, self.role);
-                                
-                                ctx.text(json!({
-                                    "type": "auth_success",
-                                    "user_id": self.user_id,
-                                    "role": self.role,
-                                    "timestamp": chrono::Utc::now().to_rfc3339()
-                                }).to_string());
-                            },
-                            "user_message" => {
-                                // Handle user message - broadcast to admins
-                                let room_id = parsed.get("room_id").and_then(|v| v.as_i64()).unwrap_or(1);
-                                let message = parsed.get("message").and_then(|v| v.as_str()).unwrap_or("");
-                                
-                                println!("💬 User message in room {}: {}", room_id, message);
-                                
-                                let message_json = json!({
-                                    "type": "user_message",
-                                    "room_id": room_id,
-                                    "message": message,
-                                    "sender_id": self.user_id.unwrap_or(1),
-                                    "sender_name": "Customer",
-                                    "sender_role": "user",
-                                    "timestamp": chrono::Utc::now().to_rfc3339()
-                                }).to_string();
-                                
-                                // Broadcast to all admin connections
-                                self.manager.broadcast_to_role("admin", message_json);
-                                
-                                // Send confirmation back to user
-                                ctx.text(json!({
-                                    "type": "message_sent",
-                                    "room_id": room_id,
-                                    "message": message,
-                                    "timestamp": chrono::Utc::now().to_rfc3339()
-                                }).to_string());
-                            },
-                            "admin_message" => {
-                                // Handle admin message - broadcast to specific user or all users
-                                let room_id = parsed.get("room_id").and_then(|v| v.as_i64()).unwrap_or(1);
-                                let message = parsed.get("message").and_then(|v| v.as_str()).unwrap_or("");
-                                let target_user_id = parsed.get("target_user_id").and_then(|v| v.as_i64());
-                                
-                                println!("💬 Admin message in room {}: {}", room_id, message);
-                                
-                                let message_json = json!({
-                                    "type": "admin_message",
-                                    "room_id": room_id,
-                                    "message": message,
-                                    "sender_id": 999,
-                                    "sender_name": "Customer Support",
-                                    "sender_role": "admin",
-                                    "timestamp": chrono::Utc::now().to_rfc3339(),
-                                    "is_read": false
-                                }).to_string();
-                                
-                                // Broadcast to specific user or all user connections
-                                if let Some(target_user_id) = target_user_id {
-                                    self.manager.broadcast_to_user(target_user_id as i32, message_json);
-                                } else {
-                                    self.manager.broadcast_to_role("customer", message_json.clone());
-                                    self.manager.broadcast_to_role("user", message_json);
-                                }
-                                
-                                // Send confirmation back to admin
-                                ctx.text(json!({
-                                    "type": "message_sent",
-                                    "room_id": room_id,
-                                    "message": message,
-                                    "timestamp": chrono::Utc::now().to_rfc3339()
-                                }).to_string());
-                            },
-                            "ping" => {
-                                ctx.text(json!({
-                                    "type": "pong",
-                                    "timestamp": chrono::Utc::now().to_rfc3339()
-                                }).to_string());
-                            },
-                            _ => {
-                                // Echo other messages
-                                ctx.text(json!({
-                                    "type": "echo",
-                                    "original_type": message_type,
-                                    "message": text_str,
-                                    "timestamp": chrono::Utc::now().to_rfc3339()
-                                }).to_string());
-                            }
-                        }
-                    }
-                } else {
-                    // Invalid JSON
-                    ctx.text(json!({
-                        "type": "error",
-                        "message": "Invalid JSON format",
-                        "timestamp": chrono::Utc::now().to_rfc3339()
-                    }).to_string());
-                }
-            }
-            Ok(ws::Message::Binary(bin)) => ctx.binary(bin),
-            _ => (),
-        }
-    }
-}
-
-async fn notification_websocket(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse> {
-    let resp = ws::start(NotificationWebSocket, &req, stream);
-    println!("🚀 Starting Notification WebSocket connection");
-    resp
-}
-
-// ...existing code...
-
-// BatikKita Backend Server - incrementally adding features
 pub async fn run_batik_server() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
@@ -261,13 +60,6 @@ pub async fn run_batik_server() -> std::io::Result<()> {
     println!("   PUT /api/auth/notifications/mark-all-read - Mark all as read");
     println!("   GET /api/auth/notifications/preferences - Get preferences");
     println!("   PUT /api/auth/notifications/preferences - Update preferences");
-// ...existing code...
-    println!("🔌 WebSocket endpoints:");
-    println!("   GET /ws/notifications - Real-time notifications");
-// ...existing code...
-
-    // Create shared connection manager
-// ...existing code...
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -278,7 +70,6 @@ pub async fn run_batik_server() -> std::io::Result<()> {
 
         App::new()
             .app_data(web::Data::new(pool.clone()))
-            .app_data(connection_manager.clone())
             .wrap(cors)
             .wrap(Logger::default())
             .route("/", web::get().to(health))
@@ -321,7 +112,6 @@ pub async fn run_batik_server() -> std::io::Result<()> {
                             .configure(crate::routes::notification::init)
                     )
             )
-            .route("/ws/notifications", web::get().to(notification_websocket))
     })
     .bind("127.0.0.1:8080")?
     .run()
@@ -334,7 +124,7 @@ async fn health() -> Result<HttpResponse> {
         "data": {
             "status": "ok",
             "version": "1.0.0",
-            "features": ["authentication", "user_management", "admin", "product_management", "reviews", "favorites", "cart", "checkout", "orders", "notifications", "websockets", "real_time"]
+            "features": ["authentication", "user_management", "admin", "product_management", "reviews", "favorites", "cart", "checkout", "orders", "notifications", "real_time"]
         },
         "message": "BatikKita Backend Server is running"
     })))
