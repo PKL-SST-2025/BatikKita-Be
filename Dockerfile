@@ -1,9 +1,8 @@
-# Stage 1: Build
+# Stage 1: Builder
 FROM rust:1.82 as builder
 
 WORKDIR /app
 
-# Copy only what's needed to build
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release || true
@@ -13,14 +12,18 @@ COPY src ./src
 RUN apt-get update && apt-get install -y \
     pkg-config libssl-dev libpq-dev build-essential
 
-# Set env for sqlx if needed
+# ✅ Install sqlx CLI
+RUN cargo install sqlx-cli --no-default-features --features postgres
+
+# ✅ Set env for migration
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
 
-# Build the binary
-RUN cargo build --release
-
+# ✅ Run migration
 RUN cargo sqlx migrate run
+
+# Final build
+RUN cargo build --release
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
@@ -31,7 +34,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# ✅ Copy only the binary, not the whole target folder
 COPY --from=builder /app/target/release/be /app/be
 
 EXPOSE 8080
