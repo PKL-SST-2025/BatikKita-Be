@@ -6,10 +6,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
 # Install build dependencies (penting untuk sqlx, openssl, dsb)
-RUN apt-get update && apt-get install -y pkg-config libssl-dev
+RUN apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev
 
-# Install sqlx-cli untuk migrasi
-RUN cargo install sqlx-cli --no-default-features --features postgres
+# Install sqlx-cli versi terbaru yang cocok
+RUN cargo install sqlx-cli --version 0.7.3 --no-default-features --features postgres
 
 # Build the application
 RUN cargo build --release --verbose
@@ -17,7 +17,6 @@ RUN cargo build --release --verbose
 # Runtime stage
 FROM debian:bookworm-slim
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
@@ -26,14 +25,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy the binary from builder stage
 COPY --from=builder /app/target/release/be /app/be
 COPY migrations ./migrations
 
-# Expose port
 EXPOSE 8080
-
 ENV PORT=8080
 
-# Jalankan migrasi sebelum menjalankan aplikasi
 CMD sqlx migrate run && ./be
