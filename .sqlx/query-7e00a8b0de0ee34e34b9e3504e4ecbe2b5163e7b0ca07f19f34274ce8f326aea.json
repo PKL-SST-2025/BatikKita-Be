@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cart_items (cart_id, product_id, quantity, size, color, price_at_time, created_at, updated_at)\n                 VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Varchar",
+        "Varchar",
+        "Numeric"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e00a8b0de0ee34e34b9e3504e4ecbe2b5163e7b0ca07f19f34274ce8f326aea"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE products SET stock = stock - $1, sold_count = sold_count + $2 WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2aed586d6aeb2a09d9e6b782ce586360c9a95928ffaee78fa4b1ff2d6ff39d4a"
+}

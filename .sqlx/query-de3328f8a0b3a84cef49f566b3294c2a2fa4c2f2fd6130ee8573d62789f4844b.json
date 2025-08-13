@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM cart_items ci\n             USING carts c\n             WHERE ci.cart_id = c.id AND c.user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "de3328f8a0b3a84cef49f566b3294c2a2fa4c2f2fd6130ee8573d62789f4844b"
+}

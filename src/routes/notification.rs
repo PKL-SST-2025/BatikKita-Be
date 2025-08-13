@@ -28,12 +28,13 @@ async fn get_notifications(
         conditions.push(format!("type = ${}", param_count));
     }
 
-    if let Some(is_read) = filters.is_read {
+    // Fix: Use underscore prefix for unused variables
+    if let Some(_is_read) = filters.is_read {
         param_count += 1;
         conditions.push(format!("is_read = ${}", param_count));
     }
 
-    if let Some(is_deleted) = filters.is_deleted {
+    if let Some(_is_deleted) = filters.is_deleted {
         param_count += 1;
         conditions.push(format!("is_deleted = ${}", param_count));
     } else {
@@ -41,7 +42,7 @@ async fn get_notifications(
         conditions.push("is_deleted = false".to_string());
     }
 
-    if let Some(priority) = &filters.priority {
+    if let Some(_priority) = &filters.priority {
         param_count += 1;
         conditions.push(format!("priority = ${}", param_count));
     }
@@ -96,8 +97,8 @@ async fn get_notification_stats(
 ) -> Result<impl Responder> {
     let user_id: i32 = claims.sub.parse().unwrap();
 
-    let stats = match sqlx::query_as!(
-        NotificationStats,
+    // Fix: Explicitly handle the query result and type the stats properly
+    let stats_result = sqlx::query!(
         r#"
         SELECT 
             COUNT(*) as total_count,
@@ -111,8 +112,14 @@ async fn get_notification_stats(
         user_id
     )
     .fetch_one(pool.get_ref())
-    .await {
-        Ok(stats) => stats,
+    .await;
+
+    let stats = match stats_result {
+        Ok(record) => NotificationStats {
+            total_count: record.total_count.unwrap_or(0),
+            unread_count: record.unread_count.unwrap_or(0),
+            high_priority_unread: record.high_priority_unread.unwrap_or(0),
+        },
         Err(e) => {
             eprintln!("Database error: {}", e);
             return Ok(HttpResponse::InternalServerError().json("Failed to fetch notification stats"));
@@ -182,12 +189,13 @@ async fn update_notification(
     let mut updates = Vec::new();
     let mut param_count = 2;
 
-    if let Some(is_read) = data.is_read {
+    // Fix: Use underscore prefix for unused variables
+    if let Some(_is_read) = data.is_read {
         updates.push(format!("is_read = ${}", param_count));
         param_count += 1;
     }
 
-    if let Some(is_deleted) = data.is_deleted {
+    if let Some(_is_deleted) = data.is_deleted {
         updates.push(format!("is_deleted = ${}", param_count));
         param_count += 1;
     }
@@ -244,22 +252,15 @@ async fn mark_multiple_notifications(
     }
 
     let mut updates = Vec::new();
-    let mut param_values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send>> = Vec::new();
     let mut param_count = 1;
 
-    // Add user_id as first parameter
-    param_values.push(Box::new(user_id));
-    param_count += 1;
-
     if let Some(is_read) = data.is_read {
-        updates.push(format!("is_read = ${}", param_count));
-        param_values.push(Box::new(is_read));
+        updates.push(format!("is_read = ${}", param_count + 1));
         param_count += 1;
     }
 
     if let Some(is_deleted) = data.is_deleted {
-        updates.push(format!("is_deleted = ${}", param_count));
-        param_values.push(Box::new(is_deleted));
+        updates.push(format!("is_deleted = ${}", param_count + 1));
         param_count += 1;
     }
 
@@ -269,23 +270,23 @@ async fn mark_multiple_notifications(
 
     updates.push("updated_at = NOW()".to_string());
 
-    // Create placeholders for IDs
-    let id_placeholders: Vec<String> = data.notification_ids.iter()
-        .enumerate()
-        .map(|(i, _)| format!("${}", param_count + i))
-        .collect();
-
     let query_str = format!(
-        "UPDATE notifications SET {} WHERE user_id = $1 AND id = ANY(ARRAY[{}])",
+        "UPDATE notifications SET {} WHERE user_id = $1 AND id = ANY(${})",
         updates.join(", "),
-        id_placeholders.join(", ")
+        param_count + 1
     );
 
-    let result = match sqlx::query(&query_str)
-        .bind(user_id)
-        .bind(data.is_read)
-        .bind(data.is_deleted)
-        .bind(&data.notification_ids)
+    let mut query = sqlx::query(&query_str).bind(user_id);
+
+    if let Some(is_read) = data.is_read {
+        query = query.bind(is_read);
+    }
+    if let Some(is_deleted) = data.is_deleted {
+        query = query.bind(is_deleted);
+    }
+    query = query.bind(&data.notification_ids);
+
+    let result = match query
         .execute(pool.get_ref())
         .await {
             Ok(result) => result,

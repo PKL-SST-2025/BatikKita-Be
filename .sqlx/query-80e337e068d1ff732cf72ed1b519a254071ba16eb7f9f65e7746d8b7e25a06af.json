@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.id, f.product_id, f.created_at, p.name, p.image_url, p.price, p.original_price, \n                COALESCE(AVG(r.rating), 0) as rating, COUNT(r.id) as reviews_count\n         FROM favorites f\n         JOIN products p ON f.product_id = p.id\n         LEFT JOIN reviews r ON p.id = r.product_id\n         WHERE f.user_id = $1 AND p.is_active = true\n         GROUP BY f.id, f.product_id, f.created_at, p.name, p.image_url, p.price, p.original_price\n         ORDER BY f.created_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "product_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "image_url",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "price",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 6,
+        "name": "original_price",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 7,
+        "name": "rating",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 8,
+        "name": "reviews_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "80e337e068d1ff732cf72ed1b519a254071ba16eb7f9f65e7746d8b7e25a06af"
+}

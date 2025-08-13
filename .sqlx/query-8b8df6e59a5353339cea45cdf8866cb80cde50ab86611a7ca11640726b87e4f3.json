@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cart_items SET quantity = $1, size = $2, color = $3, updated_at = NOW() \n             WHERE id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Varchar",
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b8df6e59a5353339cea45cdf8866cb80cde50ab86611a7ca11640726b87e4f3"
+}
