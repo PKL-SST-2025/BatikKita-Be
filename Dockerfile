@@ -9,7 +9,7 @@ COPY src ./src
 RUN apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev
 
 # Install sqlx-cli versi yang cocok
-RUN cargo install sqlx-cli --version 0.7.3 --features postgres
+RUN cargo install sqlx-cli --version 0.7.3 --no-default-features --features postgres
 
 # Build the application
 RUN cargo build --release --verbose
