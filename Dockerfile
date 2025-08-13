@@ -17,10 +17,10 @@ RUN apt-get update && apt-get install -y \
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
 
-RUN cargo sqlx migrate run
-
 # Build the binary
 RUN cargo build --release
+
+RUN cargo sqlx migrate run
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
