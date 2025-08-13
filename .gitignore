@@ -6,7 +6,6 @@ target/
 .idea/
 
 # Environment
-.env
 .env.local
 
 # Logs
